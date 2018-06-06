@@ -1,0 +1,103 @@
+#!/bin/bash
+#
+# Usage: .//check_esx_cpu
+#
+# Description: 
+#		This plugin will catch the CPU Load from an VMWare ESX Server, testet with ESX 3.5.0. 
+#		the Current Version Supports 1 CPU with 4 Core's. Make sure that the script is fetiching the
+#		right DATA. You can test it with the following command: 
+#		[root@esx01]# esxtop -b -d 2 -n 1 | awk -F "," '{print $12}' 
+#			      "\\esx01.local\Physical Cpu(_Total)\% Processor Time" 
+#			      "3.91"
+#		if you get soething like "Physical Cpu(3)", increase the value from '{print $12}' to 13,
+#		or 16 if you have a 2 Quadcore CPUs, play around until you get the correct Data back from the server
+#
+# Created:      2008-09-23 (Sebastian Mueller)
+#
+# Changes:      2008-09-24      update Description (Sebastian Mueller)
+#
+#
+#
+
+##################################################################################
+
+
+##################################################################################
+
+PATH="/usr/bin:/usr/sbin:/bin:/sbin"
+
+STATE_OK=0
+STATE_WARNING=1
+STATE_CRITICAL=2
+STATE_UNKNOWN=3
+STATE_DEPENDENT=4
+
+print_gpl() {
+    echo "This program is free software; you can redistribute it and/or modify"
+    echo "it under the terms of the GNU General Public License as published by"
+    echo "the Free Software Foundation; either version 2 of the License, or"
+    echo "(at your option) any later version."
+    echo ""
+    echo "This program is distributed in the hope that it will be useful,"
+    echo "but WITHOUT ANY WARRANTY; without even the implied warranty of"
+    echo "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the"
+    echo "GNU General Public License for more details."
+    echo ""
+    echo "You should have received a copy of the GNU General Public License"
+    echo "along with this program; if not, write to the Free Software"
+    echo "Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA"
+}
+
+print_help(){
+        echo ""
+        echo "System process and port check script for Nagios."
+        echo "Tested on RHE3/4, Fedora 4, Solaris 9"
+        echo ""
+        echo "Usage: ./check_system_pp"
+        echo "Website: http://www.nagiosexchange.org"
+        echo ""
+        print_gpl
+}
+
+while test -n "$1"
+do
+        case "$1" in
+          *) print_help; exit $STATE_OK;;
+        esac
+done
+
+check_processes_red()
+{
+        
+        ESX_CPU=`sudo -u root esxtop -b -d 2 -n 1 | awk -F "," '{print $12}' |grep -v esx | tr -t '.' ',' | tr -d '"' | awk '{printf "%.0f",$1}'`
+	exit_red=0
+
+        if  [ $ESX_CPU -ge 95 ]; then
+                exit_red=$STATE_CRITICAL
+        elif [ $ESX_CPU -ge 80 ]; then
+		exit_red=$STATE_WARNING
+	elif [ $ESX_CPU -lt 79 ]; then
+                exit_red=$STATE_OK
+        fi
+}
+
+check_processes_red
+
+final_exit=`expr  $exit_red `
+
+if [ $final_exit -eq "0"  ]; then
+        echo "SYSTEM OK - CPU LOAD Normal - Current Load: $ESX_CPU %"
+        exitstatus=$STATE_OK
+
+elif [ $final_exit -eq "1" ]; then
+        echo "SYSTEM WARNING - CPU LOAD more then 85% - Current Load: $ESX_CPU %"
+        exitstatus=$STATE_WARNING
+
+elif [ $final_exit -ge "1" ]; then
+        echo "SYSTEM CRITICAL - CPU LOAD more then 95% - Current Load: $ESX_CPU %"
+        exitstatus=$STATE_CRITICAL
+fi
+
+exit $exitstatus
+
+
